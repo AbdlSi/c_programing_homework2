@@ -4,7 +4,7 @@
 
 /* Constants */
 #define COLS 30
-#define FILENAME "map.txt"
+#define FILENAME "map.txt" /* in order for the program to work you need to dowload this file in the same folder as the code file. For convenience you dowload the whole github repository and it will work properly*/
 #define SCORES_FILE "scores.txt"
 
 /* Main Data Structures */
@@ -407,3 +407,4 @@ void saveScoreToFile(ScoreBoard *sb, int duration) {
     printf("Score saved to %s\n", SCORES_FILE);
 
 }
+
