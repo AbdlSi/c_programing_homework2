@@ -4,7 +4,7 @@
 
 /* Constants */
 #define COLS 30
-#define FILENAME "C:\\Users\\asus\\Downloads\\map.txt"
+#define FILENAME "map.txt"
 #define SCORES_FILE "scores.txt"
 
 /* Main Data Structures */
@@ -405,4 +405,5 @@ void saveScoreToFile(ScoreBoard *sb, int duration) {
             
     fclose(filePointer);
     printf("Score saved to %s\n", SCORES_FILE);
+
 }
