@@ -1,0 +1,408 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Constants */
+#define COLS 30
+#define FILENAME "C:\\Users\\asus\\Downloads\\map.txt"
+#define SCORES_FILE "scores.txt"
+
+/* Main Data Structures */
+typedef struct {
+    int x; 
+    int y; 
+} Player;
+
+typedef struct {
+    int score;
+    int sCount; 
+    int gCount; 
+    int dCount; 
+    int flag;   
+} ScoreBoard;
+
+/* Function Prototypes */
+char **allocateMap(int rows);
+void loadMap(char **map, int rows, char *filename);
+void printMap(char **map, int rows);
+void freeMap(char **map, int rows);
+
+void moveUp(Player *p, char **map, ScoreBoard *sb);
+void moveDown(Player *p, char **map, ScoreBoard *sb);
+void moveLeft(Player *p, char **map, ScoreBoard *sb);
+void moveRight(Player *p, char **map, ScoreBoard *sb);
+void handleMove(Player *p, char **map, ScoreBoard *sb, int nx, int ny);
+
+int hasExit(char **map, int rows);
+int hasReachableItem(char **map, Player *p);
+void printControls();
+void saveScoreToFile(ScoreBoard *sb, int duration);
+
+/* Main Execution Function */
+int main() {
+    int totalRows = 0;
+    char lineBuffer[COLS + 5];
+    
+    // We try to open the file specifically to count how many rows are in it
+    FILE *filePointer = fopen(FILENAME, "r");
+    if (filePointer == NULL) {
+        printf("Error: Could not open the map file.\n");
+        return 1;
+    }
+
+    // specific loop to count lines
+    while (fgets(lineBuffer, sizeof(lineBuffer), filePointer) != NULL) {
+        totalRows = totalRows + 1;
+    }
+    fclose(filePointer);
+
+    // Memory Allocation for the Map
+    char **gameMap = allocateMap(totalRows);
+    loadMap(gameMap, totalRows, FILENAME);
+
+    // Player and Score Initialization
+    Player mainPlayer;
+    ScoreBoard myScoreBoard;
+    
+    // Set initial values manually
+    myScoreBoard.score = 0;
+    myScoreBoard.sCount = 0;
+    myScoreBoard.gCount = 0;
+    myScoreBoard.dCount = 0;
+    myScoreBoard.flag = 0;
+    
+    // Find where the player 'P' starts on the map
+    int rowIndex;
+    int colIndex;
+    for (rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+        for (colIndex = 0; colIndex < COLS; colIndex++) {
+            if (gameMap[rowIndex][colIndex] == 'P') {
+                mainPlayer.x = rowIndex;
+                mainPlayer.y = colIndex;
+            }
+        }
+    }
+
+    int isGameRunning = 1;
+    int gameDurationCounter = 0; 
+    char userInputChar;
+
+    // Main Game Loop
+    while (isGameRunning == 1) {
+        
+        printf("\n\n\n\n"); 
+
+        printControls();
+        
+        // Calculate current score based on time deduction
+        int currentDisplayScore = myScoreBoard.score - gameDurationCounter;
+        printf("Score: %d | Time: %d sec\n", currentDisplayScore, gameDurationCounter);
+        
+        printMap(gameMap, totalRows);
+
+        // Check if there are any items left that we can actually reach
+        int checkReachable = hasReachableItem(gameMap, &mainPlayer);
+        if (checkReachable == 0) {
+            printf("\nNo reachable items left. Game Over!\n");
+            isGameRunning = 0;
+            break;
+        }
+
+        // Check if all items are gone from the map
+        int itemsLeft = hasExit(gameMap, totalRows);
+        if (itemsLeft == 0) {
+            printf("\nAll items collected! You Win!\n");
+            isGameRunning = 0;
+            break;
+        }
+
+        printf("Move (w/a/s/d): ");
+        scanf(" %c", &userInputChar); 
+
+        // Process User Input
+        int validMoveMade = 0;
+
+        if (userInputChar == 'w') {
+            moveUp(&mainPlayer, gameMap, &myScoreBoard);
+            validMoveMade = 1;
+        }
+        else if (userInputChar == 's') {
+            moveDown(&mainPlayer, gameMap, &myScoreBoard);
+            validMoveMade = 1;
+        }
+        else if (userInputChar == 'a') {
+            moveLeft(&mainPlayer, gameMap, &myScoreBoard);
+            validMoveMade = 1;
+        }
+        else if (userInputChar == 'd') {
+            moveRight(&mainPlayer, gameMap, &myScoreBoard);
+            validMoveMade = 1;
+        }
+        else if (userInputChar == 'e') {
+            printf("Exiting game...\n");
+            isGameRunning = 0;
+        }
+
+        // Only increase time if a move function was called
+        if (validMoveMade == 1) {
+            gameDurationCounter = gameDurationCounter + 1;
+        }
+    }
+
+    // End of Game Processing
+    int finalCalculatedScore = myScoreBoard.score - gameDurationCounter;
+    
+    printf("\n=== SCORE BOARD ===\n");
+    printf("Silver collected: %d\n", myScoreBoard.sCount);
+    printf("Gold collected: %d\n", myScoreBoard.gCount);
+    printf("Dollar collected: %d\n", myScoreBoard.dCount);
+    printf("Time: %d sec\n", gameDurationCounter);
+    printf("Final Score: %d\n", finalCalculatedScore);
+
+    saveScoreToFile(&myScoreBoard, gameDurationCounter);
+    freeMap(gameMap, totalRows);
+
+    printf("Press Enter to exit...");
+    getchar(); 
+    getchar(); 
+    return 0;
+}
+
+/* Map Memory Management */
+
+char **allocateMap(int rows) {
+    char **newMap = (char **)malloc(rows * sizeof(char *));
+    int i;
+    int j;
+    
+    for (i = 0; i < rows; i++) {
+        newMap[i] = (char *)malloc(COLS * sizeof(char));
+        
+        // Fill with dots manually
+        for (j = 0; j < COLS; j++) {
+            newMap[i][j] = '.';
+        }
+    }
+    return newMap;
+}
+
+void loadMap(char **map, int rows, char *filename) {
+    FILE *filePointer = fopen(filename, "r");
+    if (filePointer == NULL) {
+        return;
+    }
+
+    int currentRow = 0;
+    char tempBuffer[COLS + 5];
+
+    while (currentRow < rows) {
+        if (fgets(tempBuffer, sizeof(tempBuffer), filePointer) == NULL) {
+            break;
+        }
+
+        int length = strlen(tempBuffer);
+        int j;
+        for(j = 0; j < COLS; j++) {
+            if (j < length) {
+                if(tempBuffer[j] == '\n') {
+                    break;
+                }
+                map[currentRow][j] = tempBuffer[j];
+            }
+        }
+        currentRow = currentRow + 1;
+    }
+    fclose(filePointer);
+}
+
+void printMap(char **map, int rows) {
+    int i;
+    int j;
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < COLS; j++) {
+            printf("%c", map[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+void freeMap(char **map, int rows) {
+    int i;
+    for (i = 0; i < rows; i++) {
+        free(map[i]);
+    }
+    free(map);
+}
+
+/* Movement Functions */
+
+void moveUp(Player *p, char **map, ScoreBoard *sb) {
+    handleMove(p, map, sb, p->x - 1, p->y);
+}
+
+void moveDown(Player *p, char **map, ScoreBoard *sb) {
+    handleMove(p, map, sb, p->x + 1, p->y);
+}
+
+void moveLeft(Player *p, char **map, ScoreBoard *sb) {
+    handleMove(p, map, sb, p->x, p->y - 1);
+}
+
+void moveRight(Player *p, char **map, ScoreBoard *sb) {
+    handleMove(p, map, sb, p->x, p->y + 1);
+}
+
+void handleMove(Player *p, char **map, ScoreBoard *sb, int nx, int ny) {
+    // Check for wall collision
+    if (map[nx][ny] == '#') {
+        return; 
+    }
+
+    int previousRow = p->x;
+    int previousCol = p->y;
+
+    // Remove player from old spot
+    map[previousRow][previousCol] = ' '; 
+    
+    // Check if we need to leave a wall behind
+    if (sb->flag == 1) {
+        map[previousRow][previousCol] = '#';
+        sb->flag = 0; 
+    } else {
+        map[previousRow][previousCol] = '.'; 
+    }
+
+    // Check what is in the new spot
+    char itemAtNextPos = map[nx][ny];
+    
+    if (itemAtNextPos == 'S' || itemAtNextPos == 's') {
+        sb->score = sb->score + 10;
+        sb->sCount = sb->sCount + 1;
+        sb->flag = 1;
+    } else if (itemAtNextPos == 'g') {
+        sb->score = sb->score + 20;
+        sb->gCount = sb->gCount + 1;
+        sb->flag = 1;
+    } else if (itemAtNextPos == '$') {
+        sb->score = sb->score + 30;
+        sb->dCount = sb->dCount + 1;
+        sb->flag = 1;
+    }
+
+    // Update Player Coordinates
+    p->x = nx;
+    p->y = ny;
+    
+    // Place player in new spot
+    map[nx][ny] = 'P'; 
+}
+
+/* Game Status Checks */
+
+int hasExit(char **map, int rows) {
+    int i;
+    int j;
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < COLS; j++) {
+            char currentCell = map[i][j];
+            if (currentCell == 'S' || currentCell == 's' || 
+                currentCell == 'g' || currentCell == '$') {
+                return 1; 
+            }
+        }
+    }
+    return 0; 
+}
+
+int hasReachableItem(char **map, Player *p) {
+    int MAX_POSSIBLE_ROWS = 50;
+    
+    // Create an array to keep track of where we have been
+    int visitedArray[50][COLS];
+    int r;
+    int c;
+    
+    // Initialize visited array to 0
+    for(r = 0; r < MAX_POSSIBLE_ROWS; r++) {
+        for(c = 0; c < COLS; c++) {
+            visitedArray[r][c] = 0;
+        }
+    }
+
+    // Manual Stack for Depth First Search
+    int dfsStack[1000][2];
+    int stackTopIndex = 0;
+
+    // Add starting position to stack
+    dfsStack[stackTopIndex][0] = p->x;
+    dfsStack[stackTopIndex][1] = p->y;
+    stackTopIndex = stackTopIndex + 1;
+    
+    visitedArray[p->x][p->y] = 1;
+
+    // Directions: Up, Down, Left, Right
+    int moveRow[] = {-1, 1, 0, 0};
+    int moveCol[] = {0, 0, -1, 1};
+
+    while (stackTopIndex > 0) {
+        // Pop from stack
+        stackTopIndex = stackTopIndex - 1;
+        int currentRow = dfsStack[stackTopIndex][0];
+        int currentCol = dfsStack[stackTopIndex][1];
+
+        int i;
+        for (i = 0; i < 4; i++) {
+            int nextRow = currentRow + moveRow[i];
+            int nextCol = currentCol + moveCol[i];
+
+            // Check if inside map boundaries
+            if (nextRow >= 0 && nextRow < MAX_POSSIBLE_ROWS && nextCol >= 0 && nextCol < COLS) {
+                char cellValue = map[nextRow][nextCol];
+
+                // If wall or already visited, ignore
+                if (cellValue == '#' || visitedArray[nextRow][nextCol] == 1) {
+                    continue;
+                }
+
+                // If it is an item, return true immediately
+                if (cellValue == 'S' || cellValue == 's' || cellValue == 'g' || cellValue == '$') {
+                    return 1;
+                }
+
+                // Mark as visited and add to stack
+                visitedArray[nextRow][nextCol] = 1;
+                dfsStack[stackTopIndex][0] = nextRow;
+                dfsStack[stackTopIndex][1] = nextCol;
+                stackTopIndex = stackTopIndex + 1;
+                
+                // Safety check to prevent stack overflow
+                if (stackTopIndex >= 1000) {
+                    break;
+                }
+            }
+        }
+    }
+    return 0; 
+}
+
+/* Display and File Output */
+
+void printControls() {
+    printf("Controls: w=up s=down a=left d=right e=exit\n");
+}
+
+void saveScoreToFile(ScoreBoard *sb, int duration) {
+    FILE *filePointer = fopen(SCORES_FILE, "a");
+    if (filePointer == NULL) {
+        printf("Error saving scores.\n");
+        return;
+    }
+
+    int finalScoreToWrite = sb->score - duration;
+
+    fprintf(filePointer, "DATE_PLACEHOLDER | Time: %ds | F:%d G:%d H:%d | Score: %d\n", 
+            duration, sb->sCount, sb->gCount, sb->dCount, finalScoreToWrite);
+            
+    fclose(filePointer);
+    printf("Score saved to %s\n", SCORES_FILE);
+}
